@@ -1,0 +1,54 @@
+/* ── Dashboard ── */
+.dashboard-welcome {
+    background: linear-gradient(135deg, #0d47a1, #1a73e8);
+    color: white;
+    border-radius: var(--radius-lg);
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: var(--shadow-md);
+}
+.welcome-text h1 {
+    font-size: 20px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    margin-bottom: 4px;
+}
+.welcome-text p { font-size: 15px; opacity: 0.9; }
+.welcome-icon svg { width: 64px; height: 64px; opacity: 0.3; }
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.recent-activity { margin-top: 24px; }
+.activity-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--gray-100);
+    font-size: 15px;
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+}
+.activity-dot.success { background: var(--green); }
+.activity-dot.failure { background: var(--red); }
+.activity-dot.warning { background: var(--amber); }
+.activity-time { font-size: 14px; color: var(--gray-400); margin-left: auto; white-space: nowrap; }
+
+/* Role-specific accent */
+.role-doctor   .dashboard-welcome { background: linear-gradient(135deg, #0d47a1, #1a73e8); }
+.role-nurse    .dashboard-welcome { background: linear-gradient(135deg, #1b5e20, #2e7d32); }
+.role-lab_tech .dashboard-welcome { background: linear-gradient(135deg, #e65100, #f57c00); }
+.role-admin    .dashboard-welcome { background: linear-gradient(135deg, #4a148c, #7b1fa2); }

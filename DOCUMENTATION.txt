@@ -1,0 +1,571 @@
+================================================================================
+        SECURE ELECTRONIC HEALTHCARE RECORD SYSTEM (EHRS)
+        PROJECT DOCUMENTATION
+================================================================================
+
+SYSTEM OVERVIEW
+---------------
+SECURE-ELECTRONIC-HEALTHCARE-RECORD-SYSTEM The Secure Electronic Healthcare Record System (EHRS) is a web-based application, It allows healthcare staff to securely store, access, and manage patient medical records. All clinical data is encrypted and access is strictly controlled based on user roles.
+
+The system is designed with security as the top priority:
+- All medical records are encrypted using AES-256-GCM
+- Passwords are hashed using Argon2id
+- Every login requires a 6-digit MFA code (Google Authenticator)
+- Every action is recorded in a tamper-proof audit log
+- Each role can only access the record types relevant to their job
+
+
+================================================================================
+TECHNOLOGY STACK
+================================================================================
+
+  Backend        : PHP 8.2
+  Database       : MySQL 8.0 / MariaDB
+  Web Server     : Apache 2.4 (XAMPP)
+  Encryption     : AES-256-GCM (OpenSSL)
+  Key Derivation : PBKDF2-SHA256 (100,000 iterations)
+  Authentication : Argon2id password hashing + TOTP MFA (RFC 6238)
+  Frontend       : HTML5, CSS3, Vanilla JavaScript
+  Local URL      : http://localhost/dashboard/ehrs-project/
+
+
+================================================================================
+USER ROLES
+================================================================================
+
+The system has 4 roles. Each role has different permissions.
+
+  1. Doctor    (dr.smith)     - Full clinical access
+  2. Nurse     (nurse.jones)  - Limited clinical access
+  3. Lab Tech  (lab.tech1)    - Lab results only
+  4. Admin     (admin)        - System management only, no clinical access
+
+Default password for all demo accounts: Admin@1234
+All accounts require MFA (Google Authenticator) to log in.
+
+
+================================================================================
+RECORD TYPE ACCESS MATRIX
+================================================================================
+
+  Record Type       Doctor    Nurse     Lab Tech    Admin
+  -------------------------------------------------------
+  Diagnosis           YES       NO        NO          NO
+  Prescription        YES       YES       NO          NO
+  Lab Result          YES       NO        YES         NO
+  Psychiatric         YES       NO        NO          NO
+  Vital Signs         YES       YES       NO          NO
+
+  NOTE: Admin can NEVER decrypt or view any clinical record content.
+
+
+================================================================================
+HOW TO ACCESS THE SYSTEM
+================================================================================
+
+  Login Page  : http://localhost/dashboard/ehrs-project/auth/login.php
+  Home Page   : http://localhost/dashboard/ehrs-project/
+
+  Steps to log in:
+  1. Open the login page in your browser
+  2. Enter your username and password
+  3. Click "Continue to MFA Verification"
+  4. Open Google Authenticator on your phone
+  5. Enter the 6-digit code shown for EHRS
+  6. Click "Verify & Sign In"
+  7. You will be redirected to your role dashboard
+
+
+================================================================================
+HOW THE SYSTEM WORKS - STEP BY STEP
+================================================================================
+
+------------------------------------------------------------------------
+STEP 1: AUTHENTICATION (All Users)
+------------------------------------------------------------------------
+
+When a user visits the login page:
+
+  a) They enter their username and password.
+  b) The system checks the password against the Argon2id hash in the database.
+  c) If correct, the user is moved to the MFA verification page.
+  d) The user opens Google Authenticator and enters the 6-digit TOTP code.
+  e) The system verifies the code using RFC 6238 (30-second window).
+  f) If the code is correct, a secure session is created with:
+       - user_id
+       - username
+       - role
+       - mfa_verified = true
+       - session_token (random 32-byte hex, used for encryption key derivation)
+  g) The user is redirected to their role-specific dashboard.
+
+Security during login:
+  - After 5 failed attempts, the account is locked for 15 minutes
+  - Session ID is regenerated after successful MFA to prevent session fixation
+  - Sessions expire after 30 minutes of inactivity
+
+
+------------------------------------------------------------------------
+STEP 2: PATIENT REGISTRATION (Doctor)
+------------------------------------------------------------------------
+
+Only doctors can register new patients.
+
+  a) Doctor logs in and goes to Patients > Register
+  b) Fills in patient details:
+       - First name, Last name
+       - Date of birth
+       - Gender
+       - Phone number
+       - Email address
+       - Address
+       - Blood type
+  c) The system generates a unique UUID for the patient (e.g. a3f2c1d4-...)
+  d) Patient is saved to the database
+  e) The action is recorded in the audit log
+
+The patient UUID is used later as part of the encryption key derivation
+for all records belonging to that patient.
+
+
+------------------------------------------------------------------------
+STEP 3: CREATING A MEDICAL RECORD (Doctor / Nurse / Lab Tech)
+------------------------------------------------------------------------
+
+When a user creates a medical record:
+
+  a) They navigate to a patient's profile
+  b) Click "Add Record" and select the record type
+     (only types allowed for their role are shown)
+  c) They fill in the clinical content (e.g. diagnosis notes, prescription details)
+  d) On submission, the system encrypts the content:
+
+     ENCRYPTION PROCESS:
+     -------------------
+     i.   A random 96-bit IV (Initialization Vector) is generated
+     ii.  A random 128-bit salt is generated
+     iii. A 256-bit encryption key is derived using PBKDF2-SHA256:
+            Key = PBKDF2(session_token + "|" + patient_uuid, salt, 100000 iterations)
+     iv.  The content is encrypted using AES-256-GCM with the derived key
+     v.   The key is immediately zeroed from memory after use
+     vi.  Stored in the database: ciphertext, IV, auth_tag, salt, key_id, access_roles
+
+     IMPORTANT: The encryption key is NEVER stored anywhere.
+     It is re-derived on demand from the user's session token and patient UUID.
+
+  e) The access_roles JSON field records which roles can decrypt this record
+  f) The action is logged in the audit trail
+
+
+------------------------------------------------------------------------
+STEP 4: VIEWING / DECRYPTING A MEDICAL RECORD
+------------------------------------------------------------------------
+
+When a user views a patient's records:
+
+  a) The system fetches all records for that patient from the database
+  b) For each record, it checks if the user's role is in the access_roles field
+  c) If the role is NOT allowed, the record is shown as [ENCRYPTED - ACCESS DENIED]
+  d) If the role IS allowed, the system decrypts the record:
+
+     DECRYPTION PROCESS:
+     -------------------
+     i.   The IV, auth_tag, salt, and ciphertext are retrieved from the database
+     ii.  The key is re-derived: PBKDF2(session_token + "|" + patient_uuid, salt)
+     iii. AES-256-GCM decryption is performed
+     iv.  The GCM authentication tag is verified automatically
+          (if tampered, decryption fails and an error is shown)
+     v.   The key is zeroed from memory
+     vi.  The plaintext content is displayed to the user
+
+  e) The view action is recorded in the audit log
+
+
+------------------------------------------------------------------------
+STEP 5: AUDIT LOGGING (Automatic)
+------------------------------------------------------------------------
+
+Every action in the system is automatically logged. Users cannot disable this.
+
+Each audit log entry contains:
+  - User ID and username
+  - SHA-256 hash of the patient UUID (for privacy)
+  - Operation type (e.g. LOGIN, CREATE_RECORD, VIEW_RECORD, LOGIN_FAILED)
+  - Status (success / failure / warning)
+  - IP address
+  - Browser/device info
+  - Timestamp
+  - Chain hash (SHA-256 of previous entry + current data)
+
+The chain hash links every log entry to the previous one, like a blockchain.
+If any log entry is modified or deleted, the chain breaks and the system
+detects tampering automatically.
+
+Database triggers also prevent UPDATE and DELETE on the audit_logs table,
+making the log truly append-only.
+
+
+================================================================================
+ROLE-BY-ROLE USER GUIDE
+================================================================================
+
+------------------------------------------------------------------------
+DOCTOR (dr.smith)
+------------------------------------------------------------------------
+
+Dashboard shows:
+  - Total patients
+  - Recent records
+  - Quick action buttons
+
+What a Doctor can do:
+
+  PATIENTS:
+  - Register new patients (Patients > Register)
+  - Search patients by name or ID (Patients > Search)
+  - View full patient profile and history (Patients > List > click patient)
+  - Edit patient details (Patients > Edit)
+
+  MEDICAL RECORDS:
+  - Create any record type:
+      * Diagnosis       - clinical diagnosis notes
+      * Prescription    - medication and dosage
+      * Lab Result      - test results
+      * Psychiatric     - mental health notes
+      * Vital Signs     - blood pressure, temperature, pulse, etc.
+  - View and decrypt ALL record types for any patient
+  - View lab file uploads
+
+  AUDIT:
+  - View audit logs for their own actions
+
+  Typical Doctor workflow:
+  1. Log in with username + password + MFA code
+  2. Go to Patients > Register to add a new patient
+  3. Open the patient profile
+  4. Click Add Record > Diagnosis > fill in notes > Save
+  5. Click Add Record > Prescription > fill in medication > Save
+  6. Later, open the patient and click View on any record to decrypt and read it
+  7. Log out when done
+
+
+------------------------------------------------------------------------
+NURSE (nurse.jones)
+------------------------------------------------------------------------
+
+Dashboard shows:
+  - Assigned patients
+  - Recent vital signs entries
+  - Prescription list
+
+What a Nurse can do:
+
+  PATIENTS:
+  - Search and view patients (cannot register new patients)
+
+  MEDICAL RECORDS:
+  - Create Vital Signs records (blood pressure, temperature, pulse, weight)
+  - Create Prescription records
+  - View and decrypt ONLY Vital Signs and Prescriptions
+  - Diagnosis, Psychiatric, and Lab Result records show as ACCESS DENIED
+
+  Typical Nurse workflow:
+  1. Log in with username + password + MFA code
+  2. Search for a patient by name
+  3. Open the patient profile
+  4. Click Add Record > Vital Signs > fill in readings > Save
+  5. View existing prescriptions to check medication
+  6. Log out when done
+
+
+------------------------------------------------------------------------
+LAB TECHNICIAN (lab.tech1)
+------------------------------------------------------------------------
+
+Dashboard shows:
+  - Pending lab requests
+  - Recent uploads
+
+What a Lab Tech can do:
+
+  PATIENTS:
+  - Search and view patients (read only)
+
+  MEDICAL RECORDS:
+  - Upload Lab Results (Records > Lab Upload)
+  - View and decrypt ONLY Lab Result records
+  - All other record types show as ACCESS DENIED
+
+  Typical Lab Tech workflow:
+  1. Log in with username + password + MFA code
+  2. Go to Records > Lab Upload
+  3. Search for the patient
+  4. Upload the lab result file and enter result details
+  5. Save the record (it is encrypted automatically)
+  6. Log out when done
+
+
+------------------------------------------------------------------------
+ADMINISTRATOR (admin)
+------------------------------------------------------------------------
+
+Dashboard shows:
+  - Total users
+  - System health status
+  - Recent audit activity
+
+What an Admin can do:
+
+  USER MANAGEMENT (Admin > Users):
+  - View all user accounts
+  - Create new user accounts (Admin > Create User)
+  - Edit user details and roles (Admin > Edit User)
+  - Deactivate user accounts (Admin > Deactivate User)
+  - Cannot create accounts with admin role for security
+
+  AUDIT LOGS (Audit > Logs):
+  - View the full audit trail of all system activity
+  - Filter logs by user, operation, date, status
+  - Export audit logs (Audit > Export)
+  - View individual log entry details (Audit > View Detail)
+
+  SYSTEM HEALTH (Admin > System Health):
+  - Check database connection status
+  - View audit chain integrity status
+  - Monitor active sessions
+
+  WHAT ADMIN CANNOT DO:
+  - Admin CANNOT view, open, or decrypt any clinical records
+  - Admin CANNOT see patient medical content
+  - This is enforced both by role checks and by cryptographic access control
+    (the access_roles field on every record never includes 'admin')
+
+  Typical Admin workflow:
+  1. Log in with username + password + MFA code
+  2. Go to Admin > Users to check all accounts are active
+  3. Go to Audit > Logs to review recent system activity
+  4. Go to Admin > System Health to verify system is running correctly
+  5. If a new staff member joins, go to Admin > Create User to add them
+  6. Log out when done
+
+
+================================================================================
+SECURITY FEATURES SUMMARY
+================================================================================
+
+  FEATURE                   DETAIL
+  ------------------------------------------------------------------------
+  Password Hashing          Argon2id (memory=64MB, time=4, threads=1)
+  MFA                       TOTP RFC 6238, 6-digit, 30-second window
+  Encryption                AES-256-GCM per record
+  Key Derivation            PBKDF2-SHA256, 100,000 iterations, 128-bit salt
+  Key Storage               Keys are NEVER stored, derived on demand only
+  Session Security          HttpOnly cookies, SameSite=Strict, 30min timeout
+  Session Fixation          Session ID regenerated after MFA success
+  CSRF Protection           Synchronizer token on all POST forms
+  Rate Limiting             5 failed logins = 15 minute lockout
+  Audit Trail               SHA-256 chained, append-only, trigger-protected
+  Role Enforcement          PHP role checks + JSON access_roles per record
+  Input Sanitization        htmlspecialchars on all output, PDO prepared statements
+  Directory Protection      .htaccess blocks direct access to config/crypto/database
+  Security Headers          X-Frame-Options, X-Content-Type-Options, CSP, etc.
+
+
+================================================================================
+DATABASE TABLES
+================================================================================
+
+  TABLE               PURPOSE
+  ------------------------------------------------------------------
+  users               Staff accounts (hashed passwords, MFA secrets, roles)
+  patients            Patient demographic information
+  medical_records     Encrypted clinical records (ciphertext, IV, tag, salt)
+  audit_logs          Immutable audit trail with SHA-256 chain hashes
+  login_attempts      Tracks failed logins for rate limiting
+
+
+================================================================================
+FILE STRUCTURE
+================================================================================
+
+  ehrs-project/
+  |
+  |-- auth/
+  |   |-- login.php          Username + password form
+  |   |-- verify_mfa.php     6-digit TOTP verification
+  |   |-- logout.php         Destroys session securely
+  |   `-- reset_password.php Password reset flow
+  |
+  |-- dashboard/
+  |   |-- index.php              Redirects to role dashboard
+  |   |-- doctor_dashboard.php   Doctor home screen
+  |   |-- nurse_dashboard.php    Nurse home screen
+  |   |-- lab_dashboard.php      Lab Tech home screen
+  |   `-- admin_dashboard.php    Admin home screen
+  |
+  |-- patients/
+  |   |-- register.php       Register new patient
+  |   |-- list.php           List and search patients
+  |   |-- view.php           View patient profile + records
+  |   |-- edit.php           Edit patient details
+  |   `-- search.php         Patient search
+  |
+  |-- records/
+  |   |-- create.php         Create new medical record (encrypted)
+  |   |-- view.php           View and decrypt a record
+  |   |-- list.php           List records for a patient
+  |   |-- prescription.php   Prescription management
+  |   |-- vital_signs.php    Vital signs entry
+  |   `-- lab_upload.php     Lab result file upload
+  |
+  |-- audit/
+  |   |-- logs.php           View audit log
+  |   |-- view_detail.php    Single log entry detail
+  |   `-- export.php         Export audit log
+  |
+  |-- admin/
+  |   |-- users.php          User list
+  |   |-- create_user.php    Create new user
+  |   |-- edit_user.php      Edit user
+  |   |-- deactivate_user.php Deactivate user
+  |   `-- system_health.php  System status
+  |
+  |-- crypto/
+  |   |-- CryptoEngine.php   AES-256-GCM encrypt/decrypt
+  |   |-- KeyDerivation.php  TOTP (TOTPHelper class)
+  |   `-- AuditLogger.php    Chained audit log writer
+  |
+  |-- config/
+  |   |-- database.php       DB connection constants
+  |   |-- security.php       Security parameters (Argon2, PBKDF2, session)
+  |   `-- constants.php      App constants, role maps, BASE_URL
+  |
+  |-- includes/
+  |   |-- auth_check.php     require_auth() - enforces login + session timeout
+  |   |-- role_check.php     require_role() - enforces role-based access
+  |   |-- db_connect.php     PDO database connection singleton
+  |   |-- functions.php      Helper functions (CSRF, rate limit, UUID, etc.)
+  |   |-- header.php         HTML page header
+  |   |-- footer.php         HTML page footer
+  |   |-- navbar.php         Navigation bar
+  |   `-- sidebar.php        Sidebar menu
+  |
+  |-- database/
+  |   |-- schema.sql         All table definitions
+  |   |-- triggers.sql       Audit log protection triggers
+  |   `-- seed_data.sql      Optional sample data
+  |
+  |-- security/
+  |   |-- access_denied.php  Shown when role is not permitted
+  |   |-- tamper_detected.php Shown when audit chain is broken
+  |   `-- alerts.php         Security alert display
+  |
+  |-- api/
+  |   |-- decrypt_record.php  JSON endpoint to decrypt a record
+  |   |-- encrypt_record.php  JSON endpoint to encrypt a record
+  |   |-- fetch_audit_logs.php JSON endpoint for audit data
+  |   |-- search_patients.php  JSON patient search
+  |   `-- validate_mfa.php     JSON MFA validation
+  |
+  |-- assets/
+  |   |-- css/               Stylesheets (main, auth, dashboard, forms)
+  |   `-- js/                JavaScript (validation, auth, audit filter)
+  |
+  |-- setup.php              One-time setup script (DELETE after use)
+  |-- index.php              Entry point, redirects to login or dashboard
+  `-- .htaccess              Apache security rules and headers
+
+
+================================================================================
+ENCRYPTION TECHNICAL DETAIL
+================================================================================
+
+Key Derivation:
+  key = PBKDF2-SHA256(
+            password  = session_token + "|" + patient_uuid,
+            salt      = random 128-bit value (stored per record),
+            iterations = 100,000,
+            keylen    = 32 bytes (256 bits)
+        )
+
+Encryption:
+  iv         = random 96 bits (generated fresh per record)
+  ciphertext = AES-256-GCM-Encrypt(plaintext, key, iv)
+  auth_tag   = 128-bit GCM authentication tag (stored separately)
+
+Stored in database per record:
+  - ciphertext  (base64 encoded)
+  - iv          (binary 12 bytes)
+  - auth_tag    (binary 16 bytes)
+  - kdf_salt    (binary 16 bytes)
+  - key_id      (random non-secret identifier)
+  - access_roles (JSON array of permitted roles)
+
+The encryption key is derived fresh on every decrypt request and
+immediately zeroed from memory after use. It is never written to
+disk, database, or logs.
+
+
+================================================================================
+AUDIT CHAIN INTEGRITY
+================================================================================
+
+Each audit log entry has a chain_hash calculated as:
+
+  chain_hash = SHA-256(
+      previous_chain_hash +
+      user_id +
+      operation +
+      status +
+      timestamp
+  )
+
+The first entry uses a chain of 64 zeros as the previous hash.
+
+To verify integrity, the system recalculates every chain hash from
+the beginning and compares it to the stored value. If any entry has
+been modified, deleted, or inserted out of order, the chain breaks
+and the system shows the tamper_detected.php page.
+
+Database triggers additionally block any UPDATE or DELETE on the
+audit_logs table at the database level.
+
+
+================================================================================
+SESSION SECURITY
+================================================================================
+
+After successful MFA verification, the session contains:
+
+  $_SESSION['user_id']       - Database user ID
+  $_SESSION['username']      - Username string
+  $_SESSION['role']          - Role (doctor/nurse/lab_tech/admin)
+  $_SESSION['mfa_verified']  - true
+  $_SESSION['last_activity'] - Unix timestamp (for timeout check)
+  $_SESSION['session_token'] - Random 32-byte hex (used in key derivation)
+
+Session rules:
+  - Cookie is HttpOnly (not accessible by JavaScript)
+  - Cookie is SameSite=Strict (blocks CSRF via cross-site requests)
+  - Session expires after 30 minutes of inactivity
+  - Session ID is regenerated after MFA to prevent session fixation
+  - On logout, session is fully destroyed
+
+
+================================================================================
+QUICK REFERENCE - DEMO CREDENTIALS
+================================================================================
+
+  Username       Password       Role              MFA
+  ----------------------------------------------------------
+  dr.smith       Admin@1234     Doctor            Google Authenticator
+  nurse.jones    Admin@1234     Nurse             Google Authenticator
+  lab.tech1      Admin@1234     Lab Technician    Google Authenticator
+  admin          Admin@1234     Administrator     Google Authenticator
+
+  Login URL: http://localhost/dashboard/ehrs-project/auth/login.php
+
+
+================================================================================
+END OF DOCUMENTATION
+================================================================================

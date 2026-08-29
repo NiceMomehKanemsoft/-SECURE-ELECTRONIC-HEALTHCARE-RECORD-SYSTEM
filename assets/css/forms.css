@@ -1,0 +1,154 @@
+/* ── Forms ── */
+.form-group {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+/* Floating label */
+.form-group.floating label {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    font-size: 15px;
+    color: var(--gray-400);
+    pointer-events: none;
+    transition: all 0.2s ease;
+    background: var(--white);
+    padding: 0 4px;
+    z-index: 1;
+}
+.form-group.floating input:focus ~ label,
+.form-group.floating input:not(:placeholder-shown) ~ label,
+.form-group.floating select:focus ~ label,
+.form-group.floating textarea:focus ~ label,
+.form-group.floating textarea:not(:placeholder-shown) ~ label {
+    top: -8px;
+    font-size: 14px;
+    color: var(--blue-500);
+}
+
+.form-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--gray-800);
+    margin-bottom: 6px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 12px 14px;
+    font-family: 'Google Sans', sans-serif;
+    font-size: 15px;
+    color: var(--gray-900);
+    background: var(--white);
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius);
+    outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition);
+    min-height: 44px;
+}
+.form-control:focus {
+    border-color: var(--blue-500);
+    box-shadow: 0 0 0 3px rgba(26,115,232,0.12);
+}
+.form-control.is-invalid {
+    border-color: var(--red);
+    box-shadow: 0 0 0 3px rgba(217,48,37,0.1);
+}
+.form-control.is-valid {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px rgba(30,142,62,0.1);
+}
+
+textarea.form-control { resize: vertical; min-height: 100px; }
+select.form-control { cursor: pointer; }
+
+.form-hint { font-size: 14px; color: var(--gray-600); margin-top: 4px; }
+.form-error { font-size: 14px; color: var(--red); margin-top: 4px; display: none; }
+.form-error.visible { display: block; }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+.form-section {
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--gray-200);
+}
+.form-section:last-child { border-bottom: none; }
+.form-section-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.input-group {
+    display: flex;
+    align-items: stretch;
+}
+.input-group .form-control { border-radius: var(--radius) 0 0 var(--radius); }
+.input-group-append .btn { border-radius: 0 var(--radius) var(--radius) 0; }
+
+/* Password strength */
+.password-strength { margin-top: 6px; }
+.strength-bar {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--gray-200);
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+.strength-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease, background 0.3s ease;
+    width: 0;
+}
+.strength-fill.weak   { background: var(--red);   width: 25%; }
+.strength-fill.fair   { background: var(--amber);  width: 50%; }
+.strength-fill.good   { background: var(--blue-500); width: 75%; }
+.strength-fill.strong { background: var(--green);  width: 100%; }
+.strength-text { font-size: 14px; color: var(--gray-600); }
+
+/* Checkbox / Radio */
+.form-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 15px;
+}
+.form-check input[type="checkbox"],
+.form-check input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--blue-500);
+}
+
+/* Record type selector */
+.record-type-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.record-type-btn {
+    padding: 12px;
+    border: 2px solid var(--gray-200);
+    border-radius: var(--radius);
+    background: var(--white);
+    cursor: pointer;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--gray-800);
+    transition: all var(--transition);
+    min-height: 44px;
+}
+.record-type-btn:hover { border-color: var(--blue-500); color: var(--blue-500); background: var(--blue-50); }
+.record-type-btn.selected { border-color: var(--blue-500); background: var(--blue-50); color: var(--blue-600); }

@@ -1,0 +1,48 @@
+/* ── Audit Logs ── */
+.audit-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+    align-items: flex-end;
+}
+.audit-filters .form-control { min-width: 160px; }
+
+.chain-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-weight: 500;
+    margin-bottom: 16px;
+}
+.chain-status.valid   { background: var(--green-bg); color: var(--green); }
+.chain-status.invalid { background: var(--red-bg);   color: var(--red); }
+
+.audit-op-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    background: var(--gray-100);
+    color: var(--gray-800);
+}
+.audit-op-badge.LOGIN    { background: var(--blue-50);  color: var(--blue-600); }
+.audit-op-badge.DECRYPT  { background: var(--amber-bg); color: var(--amber); }
+.audit-op-badge.ENCRYPT  { background: var(--green-bg); color: var(--green); }
+.audit-op-badge.TAMPER   { background: var(--red-bg);   color: var(--red); }
+.audit-op-badge.LOGOUT   { background: var(--gray-100); color: var(--gray-600); }
+
+.hash-display {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    color: var(--gray-600);
+    word-break: break-all;
+    background: var(--gray-50);
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--gray-200);
+}
